@@ -92,7 +92,6 @@ Interactive API documentation is available at:
 
 http://127.0.0.1:8000/docs
 
-Add your screenshot below after saving it as `swagger.png`.
 
 ![Swagger UI](swagger.png)
 
