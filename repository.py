@@ -79,3 +79,72 @@ class SQLiteTaskRepository:
         conn.commit()
         conn.close()
         return cur.rowcount > 0
+
+import os
+import psycopg2
+import psycopg2.extras
+
+
+class PostgresTaskRepository:
+    """Same interface as SQLiteTaskRepository, backed by Postgres instead.
+    Routes in main.py never need to know which one is in use."""
+
+    def __init__(self, connection_string: str):
+        self.connection_string = connection_string
+
+    def _get_connection(self):
+        return psycopg2.connect(self.connection_string)
+
+    def list_all(self):
+        conn = self._get_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM tasks ORDER BY id")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def get(self, task_id: int):
+        conn = self._get_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return dict(row) if row else None
+
+    def create(self, title: str):
+        conn = self._get_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(
+            "INSERT INTO tasks (title, done) VALUES (%s, %s) RETURNING *",
+            (title, False),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        return dict(row)
+
+    def update(self, task_id: int, title: str, done: bool):
+        conn = self._get_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(
+            "UPDATE tasks SET title = %s, done = %s WHERE id = %s RETURNING *",
+            (title, done, task_id),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        return dict(row) if row else None
+
+    def delete(self, task_id: int) -> bool:
+        conn = self._get_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
+        deleted = cur.rowcount > 0
+        conn.commit()
+        cur.close()
+        conn.close()
+        return deleted

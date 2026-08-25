@@ -1,11 +1,15 @@
+import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from dotenv import load_dotenv
 
-from repository import SQLiteTaskRepository
+from repository import PostgresTaskRepository
+
+load_dotenv()
 
 app = FastAPI(title="Task API", version="1.0")
 
-repo = SQLiteTaskRepository()
+repo = PostgresTaskRepository(os.environ["DATABASE_URL"])
 
 
 class TaskCreate(BaseModel):
