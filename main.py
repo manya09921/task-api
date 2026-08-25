@@ -71,17 +71,22 @@ def health():
 
 @app.get("/tasks", summary="List all tasks")
 def list_tasks():
-    """Return every task currently in memory."""
-    return tasks
+    """Return every task from the database."""
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM tasks").fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 
 @app.get("/tasks/{task_id}", summary="Get a single task")
 def get_task(task_id: int):
     """Return one task by id, or 404 if it doesn't exist."""
-    for task in tasks:
-        if task["id"] == task_id:
-            return task
-    raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return dict(row)
 
 
 @app.post("/tasks", status_code=201, summary="Create a task")
