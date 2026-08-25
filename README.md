@@ -1,104 +1,77 @@
 # Task API
 
-A simple RESTful Task Management API built with **FastAPI**. This project demonstrates the complete CRUD (Create, Read, Update, Delete) lifecycle using an in-memory data store.
+A CRUD API for managing a to-do list, built with FastAPI and backed by a SQLite database. Built as part of the AI Fluency Backend track (BE-01, extended in BE-02).
 
-## Features
+## What this is
 
-* Create a task
-* View all tasks
-* View a single task by ID
-* Update an existing task
-* Delete a task
-* Input validation
-* Proper HTTP status codes
-* Interactive Swagger documentation
+A REST API with five endpoints to create, read, update, and delete tasks. Data is stored in a SQLite database (`tasks.db`) — it survives server restarts.
 
-## Technologies Used
+## Why SQLite
 
-* Python 3
-* FastAPI
-* Uvicorn
-* Pydantic
+SQLite was chosen because it requires no separate database server — the whole database lives in a single file, and Python's built-in `sqlite3` module can read and write it directly. That makes it a good first real database: enough to learn actual SQL, without the setup overhead of running a separate database server.
 
-## Installation
+## Where the database is stored
 
-Clone the repository:
+The database lives in a single file called `tasks.db`, created automatically in the project's root folder the first time the app runs. If the file or the `tasks` table doesn't exist yet, the app creates them; if the table is empty, it seeds 3 example tasks. On every later run, that seeding step is skipped, so restarting the server no longer resets your data.
 
-```bash
-git clone https://github.com/manya09921/task-api.git
-cd task-api
+## How to run it
+
+1. Install Python 3.10+
+2. Install dependencies:
+   ```
+   py -m pip install fastapi uvicorn
+   ```
+3. Start the server:
+   ```
+   py -m uvicorn main:app --reload --port 8000
+   ```
+4. Open `http://localhost:8000/docs` for interactive Swagger UI, or use curl / any HTTP client against `http://localhost:8000`.
+
+## Endpoints
+
+| Method | Path            | Description                          | Success | Errors |
+|--------|-----------------|---------------------------------------|---------|--------|
+| GET    | `/`             | API info                              | 200     | —      |
+| GET    | `/health`       | Health check                          | 200     | —      |
+| GET    | `/tasks`        | List all tasks                        | 200     | —      |
+| GET    | `/tasks/{id}`   | Get a single task                     | 200     | 404 if not found |
+| POST   | `/tasks`        | Create a new task                     | 201     | 400 if title missing/empty |
+| PUT    | `/tasks/{id}`   | Replace a task's title and done status| 200     | 400 invalid body, 404 if not found |
+| DELETE | `/tasks/{id}`   | Remove a task                         | 204     | 404 if not found |
+
+All endpoints behave exactly as they did in the in-memory version (BE-01) — only the storage layer changed, from a Python list to SQLite.
+
+## Example request
+
+```
+curl -i -X POST http://localhost:8000/tasks -H "Content-Type: application/json" -d '{"title":"Buy milk"}'
 ```
 
-Install the required packages:
+```
+HTTP/1.1 201 Created
+content-type: application/json
 
-```bash
-py -m pip install fastapi uvicorn
+{"id":4,"title":"Buy milk","done":false}
 ```
 
-Run the server:
+## Database viewer
 
-```bash
-py -m uvicorn main:app --reload --port 8000
+Explored the database directly with DB Browser for SQLite, running queries like:
+
+```sql
+SELECT * FROM tasks;
 ```
 
-The API will be available at:
+![DB Browser screenshot](db-browser-screenshot.png)
 
-* API: http://127.0.0.1:8000
-* Swagger UI: http://127.0.0.1:8000/docs
-
-## API Endpoints
-
-| Method | Endpoint           | Description             |
-| ------ | ------------------ | ----------------------- |
-| GET    | `/`                | API information         |
-| GET    | `/health`          | Health check            |
-| GET    | `/tasks`           | Get all tasks           |
-| GET    | `/tasks/{task_id}` | Get a task by ID        |
-| POST   | `/tasks`           | Create a new task       |
-| PUT    | `/tasks/{task_id}` | Update an existing task |
-| DELETE | `/tasks/{task_id}` | Delete a task           |
-
-## Example Request
-
-### Create a Task
-
-```bash
-curl -X POST http://127.0.0.1:8000/tasks ^
--H "Content-Type: application/json" ^
--d "{\"title\":\"Buy milk\"}"
-```
-
-Example response:
-
-```json
-{
-  "id": 4,
-  "title": "Buy milk",
-  "done": false
-}
-```
-
-## HTTP Status Codes
-
-* **200 OK** – Successful GET or PUT request
-* **201 Created** – Task created successfully
-* **204 No Content** – Task deleted successfully
-* **400 Bad Request** – Invalid input
-* **404 Not Found** – Task not found
+Manually updating or deleting rows through the viewer is immediately reflected by the API — the API layer and the storage layer are fully separate; the API just reads and writes whatever is currently in the database.
 
 ## Swagger UI
 
-Interactive API documentation is available at:
+FastAPI generates interactive docs automatically at `/docs`. Every endpoint above is listed there with a "Try it out" button that sends real requests.
 
-http://127.0.0.1:8000/docs
+![Swagger UI screenshot](swagger-screenshot.png)
 
+## Persistence
 
-![Swagger UI](swagger.png)
-
-## Notes
-
-This project uses an **in-memory list** to store tasks. Any tasks created during execution are lost when the server is restarted because no database is used.
-
-## Author
-
-Manya Wadhwa
+Unlike the original in-memory version, task data now survives server restarts. Only the first run (or an empty database) seeds the 3 example tasks — after that, your data stays exactly as you left it.
