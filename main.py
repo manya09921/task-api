@@ -92,15 +92,18 @@ def get_task(task_id: int):
 @app.post("/tasks", status_code=201, summary="Create a task")
 def create_task(new_task: TaskCreate):
     """Create a new task. Requires a non-empty title."""
-    global next_id
     if not new_task.title or not new_task.title.strip():
         raise HTTPException(status_code=400, detail="title is required")
 
-    task = {"id": next_id, "title": new_task.title, "done": False}
-    tasks.append(task)
-    next_id += 1
-    return task
-
+    conn = get_connection()
+    cur = conn.execute(
+        "INSERT INTO tasks (title, done) VALUES (?, ?)",
+        (new_task.title, False),
+    )
+    conn.commit()
+    new_id = cur.lastrowid
+    conn.close()
+    return {"id": new_id, "title": new_task.title, "done": False}
 
 @app.put("/tasks/{task_id}", summary="Update a task")
 def update_task(task_id: int, update: TaskUpdate):
