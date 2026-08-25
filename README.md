@@ -1,31 +1,37 @@
 # Task API
 
-A CRUD API for managing a to-do list, built with FastAPI and backed by a SQLite database. Built as part of the AI Fluency Backend track (BE-01, extended in BE-02).
+A CRUD API for managing a to-do list, built with FastAPI and backed by PostgreSQL, running in Docker. Built as part of the AI Fluency Backend track (BE-01 → BE-04).
 
 ## What this is
 
-A REST API with five endpoints to create, read, update, and delete tasks. Data is stored in a SQLite database (`tasks.db`) — it survives server restarts.
+A REST API with five endpoints to create, read, update, and delete tasks. Storage moved from an in-memory list (BE-01) to SQLite (BE-02) to PostgreSQL (BE-04), running alongside the app in Docker.
 
-## Why SQLite
+## Architecture: the repository pattern
 
-SQLite was chosen because it requires no separate database server — the whole database lives in a single file, and Python's built-in `sqlite3` module can read and write it directly. That makes it a good first real database: enough to learn actual SQL, without the setup overhead of running a separate database server.
+Storage logic lives entirely inside `repository.py`, behind a consistent interface (`list_all`, `get`, `create`, `update`, `delete`). `main.py` (the routes) only ever calls these methods — it never touches SQL directly.
 
-## Where the database is stored
-
-The database lives in a single file called `tasks.db`, created automatically in the project's root folder the first time the app runs. If the file or the `tasks` table doesn't exist yet, the app creates them; if the table is empty, it seeds 3 example tasks. On every later run, that seeding step is skipped, so restarting the server no longer resets your data.
+This means swapping the storage backend from SQLite to Postgres required changing exactly **one place**: the import and the line that creates `repo` in `main.py`. Every route function was left completely untouched. That's the point of this architecture — the API layer doesn't know or care what database is underneath it.
 
 ## How to run it
 
-1. Install Python 3.10+
-2. Install dependencies:
-   ```
-   py -m pip install fastapi uvicorn
-   ```
-3. Start the server:
-   ```
-   py -m uvicorn main:app --reload --port 8000
-   ```
-4. Open `http://localhost:8000/docs` for interactive Swagger UI, or use curl / any HTTP client against `http://localhost:8000`.
+**With Docker (recommended):**
+```
+docker compose up --build
+```
+This starts both the Postgres database and the FastAPI app together. The app will be available at `http://localhost:8000`.
+
+**Without Docker (local Postgres required):**
+1. Set `DATABASE_URL` in a `.env` file (see `.env.example`)
+2. Install dependencies: `py -m pip install -r requirements.txt`
+3. Run: `py -m uvicorn main:app --reload --port 8000`
+
+## Environment variables
+
+Connection details are read from `DATABASE_URL`, provided via `.env` (gitignored). See `.env.example` for the expected format:
+```
+DATABASE_URL=postgresql://taskuser:taskpass@localhost:5432/taskdb
+```
+When running via `docker compose`, this is set directly in `docker-compose.yml` instead, pointing at the `db` service by name rather than `localhost`.
 
 ## Endpoints
 
@@ -39,39 +45,17 @@ The database lives in a single file called `tasks.db`, created automatically in 
 | PUT    | `/tasks/{id}`   | Replace a task's title and done status| 200     | 400 invalid body, 404 if not found |
 | DELETE | `/tasks/{id}`   | Remove a task                         | 204     | 404 if not found |
 
-All endpoints behave exactly as they did in the in-memory version (BE-01) — only the storage layer changed, from a Python list to SQLite.
+## Proving persistence
 
-## Example request
+Persistence was verified by:
+1. Creating a task via `POST /tasks`
+2. Confirming it appeared in `GET /tasks`
+3. Running `docker compose down` (stopping and removing both containers)
+4. Running `docker compose up` again
+5. Checking `GET /tasks` — the task was still present
 
-```
-curl -i -X POST http://localhost:8000/tasks -H "Content-Type: application/json" -d '{"title":"Buy milk"}'
-```
+This confirms the Postgres data volume (`task-pg-data`) persists independently of the container lifecycle — restarting or recreating the containers does not erase the database.
 
-```
-HTTP/1.1 201 Created
-content-type: application/json
+## Database setup
 
-{"id":4,"title":"Buy milk","done":false}
-```
-
-## Database viewer
-
-Explored the database directly with DB Browser for SQLite, running queries like:
-
-```sql
-SELECT * FROM tasks;
-```
-
-![DB Browser screenshot](db-browser-screenshot.png)
-
-Manually updating or deleting rows through the viewer is immediately reflected by the API — the API layer and the storage layer are fully separate; the API just reads and writes whatever is currently in the database.
-
-## Swagger UI
-
-FastAPI generates interactive docs automatically at `/docs`. Every endpoint above is listed there with a "Try it out" button that sends real requests.
-
-![Swagger UI screenshot](swagger-screenshot.png)
-
-## Persistence
-
-Unlike the original in-memory version, task data now survives server restarts. Only the first run (or an empty database) seeds the 3 example tasks — after that, your data stays exactly as you left it.
+The `tasks` table is created automatically the first time the Postgres container starts, via `init.sql`, mounted into Postgres's init directory in `docker-compose.yml`. No manual setup step is required when using `docker compose up`.
